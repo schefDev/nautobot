@@ -46,14 +46,14 @@ def import_object(module_and_object):
     return getattr(module, object_name, None)
 
 
-def load_plugins(settings):
+def load_plugins(PLUGINS, INSTALLED_APPS, PLUGINS_CONFIG, VERSION, MIDDLEWARE, CACHEOPS):
     """Process plugins and log errors if they can't be loaded."""
-    for plugin_name in settings.PLUGINS:
+    for plugin_name in PLUGINS:
         # Attempt to load the plugin but let any errors bubble up.
-        load_plugin(plugin_name, settings)
+        load_plugin(plugin_name, INSTALLED_APPS, PLUGINS_CONFIG, VERSION, MIDDLEWARE, CACHEOPS)
 
 
-def load_plugin(plugin_name, settings):
+def load_plugin(plugin_name, INSTALLED_APPS, PLUGINS_CONFIG, VERSION, MIDDLEWARE, CACHEOPS):
     """Process a single plugin or raise errors that get bubbled up."""
 
     logger.debug(f"Loading {plugin_name}!")
@@ -80,29 +80,23 @@ def load_plugin(plugin_name, settings):
 
     # Validate user-provided configuration settings and assign defaults. Plugin
     # validation that fails will stop before modifying any settings.
-    if plugin_name not in settings.PLUGINS_CONFIG:
-        settings.PLUGINS_CONFIG[plugin_name] = {}
-    plugin_config.validate(settings.PLUGINS_CONFIG[plugin_name], settings.VERSION)
+    if plugin_name not in PLUGINS_CONFIG:
+        PLUGINS_CONFIG[plugin_name] = {}
+    plugin_config.validate(PLUGINS_CONFIG[plugin_name], VERSION)
 
     # Plugin config is valid, so now we can and add to INSTALLED_APPS.
-    plugin_import_path = f"{plugin_config.__module__}.{plugin_config.__name__}"
-    if plugin_import_path not in settings.INSTALLED_APPS:
-        settings.INSTALLED_APPS.append(plugin_import_path)
+    INSTALLED_APPS.append(f"{plugin_config.__module__}.{plugin_config.__name__}")
 
     # Include any extra installed apps provided by the plugin
     # TODO(jathan): We won't be able to support advanced app-ordering concerns
     # and if the time comes that we do, this will have to be rethought.
-    for plugin_installed_app in plugin_config.installed_apps:
-        if plugin_installed_app not in settings.INSTALLED_APPS:
-            settings.INSTALLED_APPS.append(plugin_installed_app)
+    INSTALLED_APPS.extend(plugin_config.installed_apps)
 
     # Include any extra middleware provided by the plugin
-    for middleware in plugin_config.middleware:
-        if middleware not in settings.MIDDLEWARE:
-            settings.MIDDLEWARE.append(middleware)
+    MIDDLEWARE.extend(plugin_config.middleware)
 
     # Update caching configg
-    settings.CACHEOPS.update({f"{plugin_name}.{key}": value for key, value in plugin_config.caching_config.items()})
+    CACHEOPS.update({f"{plugin_name}.{key}": value for key, value in plugin_config.caching_config.items()})
 
 
 def get_sso_backend_name(social_auth_module):
